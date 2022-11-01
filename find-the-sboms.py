@@ -4,30 +4,31 @@ import subprocess, json
 
 with open("repos.txt") as file:
     repos = [line.rstrip() for line in file]
-
+results = open("results.json", "w")
+vulnerable = []
 for repo in repos:
     fullRepo = "mcr.microsoft.com/"+repo
     print(repo)
     result = subprocess.Popen(['crane', 'ls', fullRepo], bufsize=0, stdout=subprocess.PIPE)
-    #result = subprocess.run(['crane', 'ls', fullRepo],stdout=subprocess.PIPE)
-    #tags = result.stdout.readline
-    #for lint in iter(result.stdout.readline):
-    results = open("results.txt", "w")
-    
     for line in iter(result.stdout.readline, b''):
         tag = line.decode('utf-8')[:-1]
         #tag = line
         print(tag)
         # /Users/jrrickard/.ratify/ratify
         fullTagAndRepo = fullRepo + ":"+tag
-        verifyResult = subprocess.Popen(['/Users/jrrickard/.ratify/ratify', 'verify', '--subject', fullTagAndRepo], bufsize=0, stdout=subprocess.PIPE)
+        verifyResult = subprocess.Popen(['/Users/jrickard/.ratify/ratify', 'verify', '--subject', fullTagAndRepo], bufsize=0, stdout=subprocess.PIPE)
         obj = json.load(verifyResult.stdout)
         if obj["isSuccess"] == True:
-            print("success, skipping")
+            for result in obj["verifierReports"]:
+                if result["isSuccess"] is False:
+                    vulnerable.append(verifyResult)
+                else:
+                    print("success, skipping")
+                    continue
+        elif obj["verifierReports"][0]["message"] == "verification failed: no referrers found for this artifact":
+            print("skipping because no sbom")
             continue
-        for result_line in iter(verifyResult.stdout.readline, b''):
-            l = result_line.decode('utf-8')[:-1]
-            results.write(l)
-    results.close()
+json.dump(vulnerable, results, indent=4,separators=(',',': '))
+results.close()
         
         
